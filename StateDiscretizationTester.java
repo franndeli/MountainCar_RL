@@ -4,14 +4,14 @@ public class StateDiscretizationTester {
 
    // This class can help you test your state-space discretization
 
-    // The following two methods should store and retrieve Values for a given position and velocity
+    private static final StateDiscretization discretization = new StateDiscretization();
+
     private static double getValue(double position, double velocity) {
-        //to be filled by you with your discretization method
-        return 0.0;
+        return discretization.getValue(position, velocity);
     }
 
     private static void putValue(double position, double velocity, double value) {
-        //to be filled by you with your discretization method
+        discretization.putValue(position, velocity, value);
     }
 
     ///////////////////////////////////////////
