@@ -10,13 +10,21 @@ public class DynamicProgrammingAgent {
             MountainCarEnv.FORWARD
     };
 
-    private static final double DISCOUNT = 1.0;
+
+    // Mountain Car is continuous, so StateDiscretization turns it into a large finite grid first.
+    private static final double DISCOUNT = 0.99;
     private static final double CONVERGENCE_TOLERANCE = 1e-6;
     private static final int MAX_ITERATIONS = 500;
+    private static final int MAX_STEPS_PER_EPISODE = 10000;
 
     private final StateDiscretization discretization;
+
+    // V(s): expected return from each discretized (position, velocity) state.
     private final double[][] valueFunction;
+
     private final int[][] policy;
+
+    // Perfect model p(s', r | s, a).
     private final MountainCarEnv model;
 
     public DynamicProgrammingAgent() {
@@ -34,26 +42,30 @@ public class DynamicProgrammingAgent {
     public static void main(String[] args) {
         DynamicProgrammingAgent agent = new DynamicProgrammingAgent();
         int iterations = agent.runValueIteration();
-        boolean renderEpisode = args.length > 0 && "render".equalsIgnoreCase(args[0]);
+        boolean renderEpisode = shouldRenderEpisode(args);
 
         System.out.println("Value iteration converged in " + iterations + " iterations.");
-        agent.printSampledActions();
+        agent.printPolicyForExampleStates();
         agent.showHeatMaps();
-        agent.runEpisode(renderEpisode);
+        agent.runLearnedPolicy(renderEpisode);
     }
 
     public int runValueIteration() {
         double[][] nextValues = new double[discretization.getPositionBins()][discretization.getVelocityBins()];
 
         for (int iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+            // Bellman error
             double maxDelta = 0.0;
 
             for (int positionIndex = 0; positionIndex < discretization.getPositionBins(); positionIndex++) {
                 for (int velocityIndex = 0; velocityIndex < discretization.getVelocityBins(); velocityIndex++) {
+                    // Each grid cell is represented by its center coordinate.
                     double position = discretization.indexToPosition(positionIndex);
                     double velocity = discretization.indexToVelocity(velocityIndex);
 
                     if (isTerminal(position)) {
+                        // Terminal states have no future return, so V(s)=0 and
+                        // the chosen action is irrelevant.
                         nextValues[positionIndex][velocityIndex] = 0.0;
                         policy[positionIndex][velocityIndex] = MountainCarEnv.NOTHING;
                         continue;
@@ -64,6 +76,9 @@ public class DynamicProgrammingAgent {
 
                     for (int action : ACTIONS) {
                         Transition transition = transitionFrom(position, velocity, action);
+
+                        // Bellman optimality:
+                        // V_{k+1}(s) = max_a [ r + gamma * V_k(s') ].
                         double candidateValue = transition.reward;
 
                         if (!transition.terminal) {
@@ -72,6 +87,9 @@ public class DynamicProgrammingAgent {
                         }
 
                         if (candidateValue > bestValue) {
+                            // This argmax is the policy-improvement step folded
+                            // into value iteration: keep the action that made
+                            // the Bellman backup largest.
                             bestValue = candidateValue;
                             bestAction = action;
                         }
@@ -96,16 +114,31 @@ public class DynamicProgrammingAgent {
         return policy[discretization.positionToIndex(position)][discretization.velocityToIndex(velocity)];
     }
 
-    public void runEpisode(boolean render) {
+    public void runLearnedPolicy(boolean render) {
         boolean shouldRender = render && !GraphicsEnvironment.isHeadless();
         MountainCarEnv environment = shouldRender
                 ? new MountainCarEnv(MountainCarEnv.RENDER)
                 : new MountainCarEnv(MountainCarEnv.NONE);
+
+        if (shouldRender) {
+            System.out.println("Rendering learned policy repeatedly. Close the environment window to stop.");
+            while (true) {
+                runEpisode(environment, true);
+            }
+        }
+
+        runEpisode(environment, false);
+    }
+
+    private void runEpisode(MountainCarEnv environment, boolean renderInitialState) {
         double[] state = environment.fixedReset();
+        if (renderInitialState) {
+            MountainCarEnv.renderState(state);
+        }
         int steps = 0;
         double totalReward = 0.0;
 
-        while (state[0] == 0 && steps < 10000) {
+        while (state[0] == 0 && steps < MAX_STEPS_PER_EPISODE) {
             int action = chooseAction(state[2], state[3]);
             state = environment.step(action);
             totalReward += state[1];
@@ -123,9 +156,21 @@ public class DynamicProgrammingAgent {
         }
     }
 
+    private static boolean shouldRenderEpisode(String[] args) {
+        for (String arg : args) {
+            if ("norender".equalsIgnoreCase(arg) || "headless".equalsIgnoreCase(arg)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private Transition transitionFrom(double position, double velocity, int action) {
-        double[] nextState = model.setState(position, velocity);
-        nextState = model.step(action);
+        // Use the environment itself as the transition model.
+        // "what happens if I do a here?"
+        model.setState(position, velocity);
+        double[] nextState = model.step(action);
 
         boolean terminal = nextState[0] == 1.0;
         return new Transition(
@@ -145,7 +190,7 @@ public class DynamicProgrammingAgent {
         }
     }
 
-    private void printSampledActions() {
+    private void printPolicyForExampleStates() {
         double[] samplePositions = {-1.1, -0.75, -0.5, -0.2, 0.0, 0.45};
         double[] sampleVelocities = {-0.05, -0.02, 0.0, 0.02, 0.05};
 
