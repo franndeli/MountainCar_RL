@@ -1,7 +1,7 @@
 public class StateDiscretization {
 
-    public static final int DEFAULT_POSITION_BINS = 2000;
-    public static final int DEFAULT_VELOCITY_BINS = 2000;
+    public static final int DEFAULT_POSITION_BINS = 1000;
+    public static final int DEFAULT_VELOCITY_BINS = 1000;
 
     private final int positionBins;
     private final int velocityBins;

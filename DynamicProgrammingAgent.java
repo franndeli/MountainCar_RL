@@ -14,8 +14,7 @@ public class DynamicProgrammingAgent {
     // Mountain Car is continuous, so StateDiscretization turns it into a large finite grid first.
     private static final double DISCOUNT = 0.99;
     private static final double CONVERGENCE_TOLERANCE = 1e-6;
-    private static final int MAX_ITERATIONS = 500;
-    private static final int MAX_STEPS_PER_EPISODE = 10000;
+    private static final int MAX_ITERATIONS = 1000;
 
     private final StateDiscretization discretization;
 
@@ -35,7 +34,7 @@ public class DynamicProgrammingAgent {
         this.discretization = discretization;
         this.valueFunction = new double[discretization.getPositionBins()][discretization.getVelocityBins()];
         this.policy = new int[discretization.getPositionBins()][discretization.getVelocityBins()];
-        this.model = new MountainCarEnv();
+        this.model = new MountainCarEnv(); // transition model
         initializePolicy();
     }
 
@@ -79,6 +78,7 @@ public class DynamicProgrammingAgent {
 
                         // Bellman optimality:
                         // V_{k+1}(s) = max_a [ r + gamma * V_k(s') ].
+                        
                         double candidateValue = transition.reward;
 
                         if (!transition.terminal) {
@@ -86,12 +86,11 @@ public class DynamicProgrammingAgent {
                                     * valueFunction[transition.positionIndex][transition.velocityIndex];
                         }
 
-                        if (candidateValue > bestValue) {
-                            // This argmax is the policy-improvement step folded
-                            // into value iteration: keep the action that made
+                        if (candidateValue >= bestValue) {
+                            // keep the action that made
                             // the Bellman backup largest.
                             bestValue = candidateValue;
-                            bestAction = action;
+                            bestAction = action; // we save the best action as the policy
                         }
                     }
 
@@ -138,7 +137,7 @@ public class DynamicProgrammingAgent {
         int steps = 0;
         double totalReward = 0.0;
 
-        while (state[0] == 0 && steps < MAX_STEPS_PER_EPISODE) {
+        while (state[0] == 0) {
             int action = chooseAction(state[2], state[3]);
             state = environment.step(action);
             totalReward += state[1];
